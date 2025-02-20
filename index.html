@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Long Distance Quiz Game</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        #question { font-size: 24px; margin: 20px 0; }
+        .answer-btn { margin: 10px; padding: 15px; font-size: 18px; cursor: pointer; }
+        #scoreboard { display: flex; justify-content: space-between; margin: 30px 0; }
+        .player-score { font-size: 20px; }
+    </style>
+    <!-- Add Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-database.js"></script>
+</head>
+<body>
+    <div id="scoreboard">
+        <div class="player-score">Your Score: <span id="your-score">0</span></div>
+        <div class="player-score">Partner's Score: <span id="partner-score">0</span></div>
+    </div>
+    <div id="question">Loading question...</div>
+    <div id="answers"></div>
+
+    <script>
+        // Initialize Firebase with your config
+        const firebaseConfig = {
+            apiKey: "AIzaSyATO7GtRvOYqmk79TOwoT7xuZZX1YK_OSU",
+            authDomain: "gamenight-b7ba0.firebaseapp.com",
+            projectId: "gamenight-b7ba0",
+            storageBucket: "gamenight-b7ba0.appspot.com",
+            messagingSenderId: "345484929863",
+            appId: "1:345484929863:web:30ed57cf42c788110fba62",
+            measurementId: "G-4F2SWPJ9WY"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        // Game state
+        let playerName = prompt("Enter your name:");
+        let currentQuestion = {};
+        let yourScore = 0;
+        let partnerScore = 0;
+
+        // Fetch questions from Gemini API
+        async function fetchQuestion() {
+            try {
+                const response = await fetch("https://api.gemini.com/generate-question", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ topic: "general knowledge" }) // Customize the topic
+                });
+                const data = await response.json();
+                currentQuestion = data; // Assuming the API returns { question, answers, correctIndex }
+                showQuestion();
+            } catch (error) {
+                console.error("Error fetching question:", error);
+                document.getElementById('question').textContent = "Failed to load question. Please try again.";
+            }
+        }
+
+        // Initialize game
+        function initGame() {
+            // Listen for partner's answers
+            database.ref('game/answers').on('value', (snapshot) => {
+                const answers = snapshot.val() || {};
+                if (answers.partner !== undefined) {
+                    partnerScore = answers.partner;
+                    document.getElementById('partner-score').textContent = partnerScore;
+                }
+            });
+
+            fetchQuestion(); // Load the first question
+        }
+
+        // Display the current question and answers
+        function showQuestion() {
+            const { question, answers } = currentQuestion;
+            document.getElementById('question').textContent = question;
+
+            const answersDiv = document.getElementById('answers');
+            answersDiv.innerHTML = '';
+
+            answers.forEach((answer, index) => {
+                const button = document.createElement('button');
+                button.className = 'answer-btn';
+                button.textContent = answer;
+                button.onclick = () => checkAnswer(index);
+                answersDiv.appendChild(button);
+            });
+        }
+
+        // Check if the selected answer is correct
+        function checkAnswer(selectedIndex) {
+            const isCorrect = selectedIndex === currentQuestion.correctIndex;
+            if (isCorrect) {
+                yourScore += 10;
+                document.getElementById('your-score').textContent = yourScore;
+            }
+
+            // Update Firebase with the new score
+            database.ref('game/answers').update({
+                [playerName]: yourScore
+            });
+
+            // Move to the next question after a delay
+            setTimeout(() => {
+                fetchQuestion();
+            }, 2000);
+        }
+
+        // Start the game
+        initGame();
+    </script>
+</body>
+</html>
